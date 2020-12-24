@@ -1,5 +1,7 @@
 import copy
+import sys
 from functools import total_ordering
+import argparse
 
 
 class Direction(object):
@@ -63,13 +65,20 @@ class Chain(object):
 
         return '\n'.join(s)
 
+    def print_cells(self):
+        res = []
+        for c in self.cells:
+            res.append(f'({c[0]+1}, {c[1]+1})')
+
+        return ', '.join(res)
+
     def get_chain_score(self):
         self.score = 0
         for i, target in enumerate(targets):
             if target in self.chain_s:
                 self.score += (1 << i)
                 self.score_cnt += 1
-                self.score_l.append(i)
+                self.score_l.append(i+1)
 
         if self.score == (1 << len(targets)) - 1:
             self.fully_solved = True
@@ -125,7 +134,7 @@ def loop(dir_, c, used):
             print(f"Now have {len(chains)}")
 
         if this_chain.fully_solved:
-            print(f"Solved after checking {len(chains)} good chains")
+            # print(f"Solved after checking {len(chains)} good chains")
             chains = [this_chain]
             return True
 
@@ -142,11 +151,6 @@ def loop(dir_, c, used):
         if this_cell in used:
             continue
         else:
-            # if dir_ == Direction.ROW:
-            #     this_col = i
-            # else:
-            #     this_row = i
-
             used.append(this_cell)
             dir_.toggle()
 
@@ -158,33 +162,80 @@ def loop(dir_, c, used):
             dir_.toggle()
 
 
+def load(f):
+    global matrix, targets, msize
+
+    matrix = []
+    targets = []
+
+    line = f.readline().strip()
+    row = line.split()
+    msize = len(row)
+    print(f"Matrix size assumed to be {msize}")
+    matrix.append(row)
+
+    for i in range(msize - 1):
+        line = f.readline().strip().upper()
+        row = line.split()
+        if len(row) != msize:
+            print(f"ERROR: invalid matrix row {i+1} - got {len(row)} items, expected {msize}!")
+            exit(1)
+        matrix.append(row)
+
+    while True:
+        line = f.readline().strip().upper()
+        if not line:
+            break
+
+        row = line.split()
+        targets.append(';'.join(row))
+
+    print(f"Read {len(targets)} targets")
+
+
+def setup():
+    global buffer_l
+    parser = argparse.ArgumentParser(prog="furry-octo-chainsaw", description="Cyberpunk 2077 hacking minigame solver")
+    parser.add_argument('--buffer', help="Buffer size", default=8, type=int)
+    parser.add_argument('input', help="Input file, '-' to read from stdin")
+    args = parser.parse_args()
+
+    buffer_l = args.buffer
+    if args.input == '-':
+        f = sys.stdin
+    else:
+        try:
+            f = open(args.input, 'r')
+            load(f)
+            f.close()
+        except (IOError, OSError) as e:
+            print(f"Can't load file {args.input} due to {str(e)}")
+            exit(1)
+
+
 def main():
     global msize
     dir_ = Direction(Direction.ROW)
-    msize = len(matrix)
-    if not all(len(x) == msize for x in matrix):
-        raise RuntimeError("Invalid matrix!")
 
     res = loop(dir_, (0, 0), [])
     if res:
         print(f"Full solution found after checking {steps} chains")
     else:
-        print(f"Only partial solution(s) found after checking {steps} chains")
+        print(f"{len(chains)} partial solution(s) found after checking all {steps} chains")
 
     seen_scores = set()
-
-    print(f"Printing solutions (filterd from a list of {len(chains)})")
 
     for chain in sorted(chains):
         if chain.score not in seen_scores:
             print(f'=== Solution ===')
-            print('Sequence:', chain.chain_s.replace(';', ' '), 'score:', chain.score)
-            print('Completed targets:', ', '.join(str(x) for x in chain.score_l))
-            print('Steps:', ', '.join(str(x) for x in chain.cells))
+            print('Sequence:', chain.chain_s.replace(';', ' '))
+            print('Completed targets:', ', '.join(str(x) for x in chain.score_l), f'(score: {chain.score})')
+            print('Order:', chain.print_cells())
             print('Matrix:')
             print(chain.print_mat())
             seen_scores.add(chain.score)
 
 
 if __name__ == '__main__':
+    setup()
     main()
